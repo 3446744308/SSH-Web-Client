@@ -138,9 +138,9 @@
 <!-- AppBar -->
 <div class="mdui-appbar mdui-color-theme">
     <div class="mdui-toolbar">
-        <a href="../../index.html" class="mdui-btn mdui-btn-icon" mdui-tooltip="{content: '返回主页'}">
+        <!-- <a href="../../index.html" class="mdui-btn mdui-btn-icon" mdui-tooltip="{content: '返回主页'}">
             <i class="mdui-icon material-icons">arrow_back</i>
-        </a>
+        </a> -->
         <a href="javascript:;" class="mdui-typo-headline">SSH Web Client</a>
         <div class="mdui-toolbar-spacer"></div>
     </div>
@@ -157,6 +157,19 @@
 <div class="main-content">
     <div class="container">
         
+        <!-- Privacy Notice -->
+        <div class="mdui-card mdui-color-blue-50 mdui-m-y-2" id="privacy-notice" style="max-width: 800px; margin-left: auto; margin-right: auto;">
+            <div class="mdui-card-content mdui-valign mdui-p-a-1">
+                <i class="mdui-icon material-icons mdui-text-color-theme mdui-m-r-1">security</i>
+                <div class="mdui-typo-caption mdui-text-color-theme-text" style="flex-grow: 1;">
+                    郑重承诺：本工具所有数据交互均在您的本地网络中进行，绝不会收集或上传您的任何服务器敏感信息，请放心使用。
+                </div>
+                <button class="mdui-btn mdui-btn-icon mdui-btn-dense mdui-ripple mdui-text-color-grey-600" onclick="document.getElementById('privacy-notice').style.display='none'">
+                    <i class="mdui-icon material-icons">close</i>
+                </button>
+            </div>
+        </div>
+
         <!-- Connection Form -->
         <div class="mdui-card connection-card" id="connection-form">
             <div class="mdui-card-primary">
@@ -251,7 +264,7 @@
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
 <script>
-    const BACKEND_URL = 'http://localhost:3000';
+    const BACKEND_URL = 'http://localhost:3000';  //后端服务地址，如果在服务器部署需要改为服务器的ip:3000
     const sessions = {};
     let activeSessionId = 'new';
     let sessionCounter = 0;
@@ -261,7 +274,7 @@
         const testSocket = io(BACKEND_URL);
         testSocket.on('connect_error', () => {
             document.getElementById('server-status').style.display = 'inline-flex';
-            mdui.snackbar({message: '无法连接到后端服务，请确保 server.js 已启动', timeout: 3000});
+            mdui.snackbar({message: '无法连接到后端服务', timeout: 3000});
         });
         testSocket.on('connect', () => {
             testSocket.disconnect();
@@ -427,16 +440,26 @@
         }
     }
 
-    function connectSession(session, password) {
+    async function connectSession(session, password) {
         const termElement = document.getElementById(`xterm-${session.id}`);
         const statusElement = document.getElementById(`status-${session.id}`);
+
+        // 等待字体加载 (如果使用了自定义字体)
+        if (session.fontFamily.includes('FiraCode')) {
+            try {
+                await document.fonts.load(`${session.fontSize}px ${session.fontFamily}`);
+            } catch (e) {
+                console.warn('Font loading failed:', e);
+            }
+        }
 
         // Init Terminal with Custom Fonts
         const term = new Terminal({
             cursorBlink: true,
             theme: { background: '#000000', foreground: '#ffffff' },
             fontFamily: session.fontFamily, // 应用字体
-            fontSize: session.fontSize        // 应用大小
+            fontSize: session.fontSize,        // 应用大小
+            allowProposedApi: true
         });
         const fitAddon = new FitAddon.FitAddon();
         term.loadAddon(fitAddon);
@@ -445,7 +468,11 @@
         session.term = term;
         session.fitAddon = fitAddon;
 
-        setTimeout(() => fitAddon.fit(), 100);
+        // 增加 fit 延时并刷新
+        setTimeout(() => {
+            fitAddon.fit();
+            term.refresh(0, term.rows - 1);
+        }, 300);
 
         // Init Socket
         const socket = io(BACKEND_URL);
@@ -472,12 +499,17 @@
         socket.on('ssh-ready', () => {
             statusElement.innerText = 'Connected';
             term.clear();
-            fitAddon.fit();
-            socket.emit('resize', { 
-                cols: term.cols, 
-                rows: term.rows
-            });
-            term.focus();
+            
+            // 连接成功后再次强制 fit，确保布局正确
+            setTimeout(() => {
+                fitAddon.fit();
+                term.refresh(0, term.rows - 1);
+                socket.emit('resize', { 
+                    cols: term.cols, 
+                    rows: term.rows
+                });
+                term.focus();
+            }, 100);
         });
 
         socket.on('ssh-data', (data) => {
