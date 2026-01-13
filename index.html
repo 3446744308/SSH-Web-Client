@@ -3,46 +3,141 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>在线SSH连接工具</title>
+    <title>在线SSH连接工具-SSH-Web-Client</title>
     <!-- MDUI CSS -->
     <link rel="stylesheet" href="https://unpkg.com/mdui@1.0.2/dist/css/mdui.min.css"/>
     <!-- Xterm.js CSS -->
     <link rel="stylesheet" href="https://unpkg.com/xterm@5.3.0/css/xterm.css" />
     <style>
+        /* 字体定义 */
+        @font-face {
+            font-family: 'FiraCode-Regular';
+            src: url('./font/FiraCode-Regular.woff') format('woff');
+        }
+        @font-face {
+            font-family: 'FiraCode-Bold';
+            src: url('./font/FiraCode-Bold.woff') format('woff');
+        }
+        @font-face {
+            font-family: 'FiraCode-Light';
+            src: url('./font/FiraCode-Light.woff') format('woff');
+        }
+        @font-face {
+            font-family: 'FiraCode-Medium';
+            src: url('./font/FiraCode-Medium.woff') format('woff');
+        }
+        @font-face {
+            font-family: 'FiraCode-SemiBold';
+            src: url('./font/FiraCode-SemiBold.woff') format('woff');
+        }
+
         body {
             background-color: #f1f1f1;
+            overflow: hidden; /* 防止双滚动条 */
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .main-content {
+            flex: 1;
+            overflow: auto;
+            position: relative;
+            padding-top: 20px;
         }
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 0 20px;
         }
-        .terminal-container {
-            margin-top: 20px;
-            padding: 10px;
+        .terminal-instance-wrapper {
             background: #000;
+            padding: 10px;
             border-radius: 4px;
             box-shadow: 0 2px 2px 0 rgba(0,0,0,.14), 0 3px 1px -2px rgba(0,0,0,.2), 0 1px 5px 0 rgba(0,0,0,.12);
-            display: none; /* Initially hidden */
+            height: calc(100vh - 180px); /* 适应屏幕高度 */
+            display: none;
+            flex-direction: column;
         }
-        #terminal {
-            width: 100%;
-            height: 600px;
+        .xterm-viewport {
+            overflow-y: auto !important;
         }
         .connection-card {
-            padding: 20px;
+            margin-top: 20px;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
         }
-        .status-bar {
-            margin-top: 10px;
-            padding: 10px;
-            border-radius: 4px;
+        /* 自定义 Tab 样式 */
+        .session-tabs {
+            background-color: #fff;
+            box-shadow: 0 2px 4px -1px rgba(0,0,0,.2);
+            display: flex;
+            align-items: center;
+            overflow-x: auto;
+            padding: 0 10px;
+            height: 48px;
+        }
+        .session-tab {
+            display: inline-flex;
+            align-items: center;
+            padding: 0 16px;
+            height: 48px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            opacity: 0.7;
+            transition: all 0.3s;
+            min-width: 120px;
+            max-width: 200px;
+        }
+        .session-tab:hover {
+            opacity: 1;
+            background-color: rgba(0,0,0,0.04);
+        }
+        .session-tab.active {
+            opacity: 1;
+            color: #3f51b5;
+            border-bottom-color: #3f51b5;
+        }
+        .session-tab-title {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-right: 8px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .session-tab-close {
+            font-size: 16px;
+            width: 20px;
+            height: 20px;
+            line-height: 20px;
+            text-align: center;
+            border-radius: 50%;
+        }
+        .session-tab-close:hover {
+            background-color: rgba(0,0,0,0.1);
+            color: #f44336;
+        }
+        .add-tab-btn {
+            padding: 0 12px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            color: #757575;
+        }
+        .add-tab-btn:hover {
+            background-color: rgba(0,0,0,0.04);
+            color: #3f51b5;
         }
     </style>
 </head>
 <body class="mdui-theme-primary-indigo mdui-theme-accent-pink">
 
-<div class="mdui-appbar mdui-appbar-fixed">
-    <div class="mdui-toolbar mdui-color-theme">
+<!-- AppBar -->
+<div class="mdui-appbar mdui-color-theme">
+    <div class="mdui-toolbar">
         <a href="../../index.html" class="mdui-btn mdui-btn-icon" mdui-tooltip="{content: '返回主页'}">
             <i class="mdui-icon material-icons">arrow_back</i>
         </a>
@@ -51,71 +146,102 @@
     </div>
 </div>
 
-<div class="mdui-container container" style="margin-top: 80px;">
-    
-    <!-- Connection Form -->
-    <div class="mdui-card connection-card" id="connection-form">
-        <div class="mdui-card-primary">
-            <div class="mdui-card-primary-title">新建连接</div>
-            <div class="mdui-card-primary-subtitle">请输入SSH服务器信息 (需启动本地Server)</div>
-        </div>
-        <div class="mdui-card-content">
-            <div class="mdui-row">
-                <div class="mdui-col-xs-12 mdui-col-sm-8">
-                    <div class="mdui-textfield mdui-textfield-floating-label">
-                        <i class="mdui-icon material-icons">dns</i>
-                        <label class="mdui-textfield-label">主机地址 (Host)</label>
-                        <input class="mdui-textfield-input" type="text" id="host" value="localhost"/>
-                    </div>
-                </div>
-                <div class="mdui-col-xs-12 mdui-col-sm-4">
-                    <div class="mdui-textfield mdui-textfield-floating-label">
-                        <i class="mdui-icon material-icons">settings_input_component</i>
-                        <label class="mdui-textfield-label">端口 (Port)</label>
-                        <input class="mdui-textfield-input" type="number" id="port" value="22"/>
-                    </div>
-                </div>
-            </div>
-            <div class="mdui-row">
-                <div class="mdui-col-xs-12 mdui-col-sm-6">
-                    <div class="mdui-textfield mdui-textfield-floating-label">
-                        <i class="mdui-icon material-icons">person</i>
-                        <label class="mdui-textfield-label">用户名 (Username)</label>
-                        <input class="mdui-textfield-input" type="text" id="username" />
-                    </div>
-                </div>
-                <div class="mdui-col-xs-12 mdui-col-sm-6">
-                    <div class="mdui-textfield mdui-textfield-floating-label">
-                        <i class="mdui-icon material-icons">vpn_key</i>
-                        <label class="mdui-textfield-label">密码 (Password)</label>
-                        <input class="mdui-textfield-input" type="password" id="password" />
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="mdui-card-actions">
-            <button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-theme-accent" onclick="connectSSH()">
-                <i class="mdui-icon material-icons mdui-icon-left">link</i> 连接
-            </button>
-            <div class="mdui-chip" id="server-status" style="display:none; margin-left: 10px;">
-                <span class="mdui-chip-icon"><i class="mdui-icon material-icons">error</i></span>
-                <span class="mdui-chip-title">后端服务未连接</span>
-            </div>
-        </div>
+<!-- Tabs Bar -->
+<div class="session-tabs" id="session-tabs">
+    <div class="session-tab active" id="tab-new" onclick="showNewConnectionForm()">
+        <span class="session-tab-title">新建连接</span>
     </div>
+    <!-- 动态生成的 Tab 将放在这里 -->
+</div>
 
-    <!-- Terminal Area -->
-    <div class="terminal-container" id="terminal-container">
-        <div class="mdui-toolbar mdui-color-black mdui-text-color-white-text">
-            <span class="mdui-typo-title">Terminal</span>
-            <div class="mdui-toolbar-spacer"></div>
-            <button class="mdui-btn mdui-btn-icon" onclick="disconnectSSH()" mdui-tooltip="{content: '断开连接'}">
-                <i class="mdui-icon material-icons">close</i>
-            </button>
+<div class="main-content">
+    <div class="container">
+        
+        <!-- Connection Form -->
+        <div class="mdui-card connection-card" id="connection-form">
+            <div class="mdui-card-primary">
+                <div class="mdui-card-primary-title">新建连接</div>
+                <div class="mdui-card-primary-subtitle">请输入SSH服务器信息 (需启动本地Server)</div>
+            </div>
+            <div class="mdui-card-content">
+                <div class="mdui-row">
+                    <div class="mdui-col-xs-12 mdui-col-sm-8">
+                        <div class="mdui-textfield mdui-textfield-floating-label">
+                            <i class="mdui-icon material-icons">dns</i>
+                            <label class="mdui-textfield-label">主机地址 (Host)</label>
+                            <input class="mdui-textfield-input" type="text" id="host" value="localhost"/>
+                        </div>
+                    </div>
+                    <div class="mdui-col-xs-12 mdui-col-sm-4">
+                        <div class="mdui-textfield mdui-textfield-floating-label">
+                            <i class="mdui-icon material-icons">settings_input_component</i>
+                            <label class="mdui-textfield-label">端口 (Port)</label>
+                            <input class="mdui-textfield-input" type="number" id="port" value="22"/>
+                        </div>
+                    </div>
+                </div>
+                <div class="mdui-row">
+                    <div class="mdui-col-xs-12 mdui-col-sm-6">
+                        <div class="mdui-textfield mdui-textfield-floating-label">
+                            <i class="mdui-icon material-icons">person</i>
+                            <label class="mdui-textfield-label">用户名 (Username)</label>
+                            <input class="mdui-textfield-input" type="text" id="username" />
+                        </div>
+                    </div>
+                    <div class="mdui-col-xs-12 mdui-col-sm-6">
+                        <div class="mdui-textfield mdui-textfield-floating-label">
+                            <i class="mdui-icon material-icons">vpn_key</i>
+                            <label class="mdui-textfield-label">密码 (Password)</label>
+                            <input class="mdui-textfield-input" type="password" id="password" />
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mdui-divider" style="margin: 20px 0;"></div>
+                <div class="mdui-typo-subheading">外观设置</div>
+                
+                <div class="mdui-row">
+                    <div class="mdui-col-xs-12 mdui-col-sm-6">
+                        <div class="mdui-textfield">
+                            <i class="mdui-icon material-icons">text_format</i>
+                            <label class="mdui-textfield-label" style="margin-left: 36px;">字体样式</label>
+                            <select class="mdui-select" id="font-family" style="width: calc(100% - 36px); margin-left: 36px;">
+                                <option value="FiraCode-Regular">Fira Code Regular (默认)</option>
+                                <option value="FiraCode-Bold">Fira Code Bold</option>
+                                <option value="FiraCode-Light">Fira Code Light</option>
+                                <option value="FiraCode-Medium">Fira Code Medium</option>
+                                <option value="FiraCode-SemiBold">Fira Code SemiBold</option>
+                                <option value='Menlo, Monaco, "Courier New", monospace'>系统默认等宽字体</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mdui-col-xs-12 mdui-col-sm-6">
+                         <div class="mdui-textfield mdui-textfield-floating-label">
+                            <i class="mdui-icon material-icons">format_size</i>
+                            <label class="mdui-textfield-label">字体大小 (px)</label>
+                            <input class="mdui-textfield-input" type="number" id="font-size" value="14" min="10" max="32"/>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            <div class="mdui-card-actions">
+                <button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-theme-accent" onclick="startNewSession()">
+                    <i class="mdui-icon material-icons mdui-icon-left">link</i> 连接
+                </button>
+                <div class="mdui-chip" id="server-status" style="display:none; margin-left: 10px;">
+                    <span class="mdui-chip-icon"><i class="mdui-icon material-icons">error</i></span>
+                    <span class="mdui-chip-title">后端服务未连接</span>
+                </div>
+            </div>
         </div>
-        <div id="terminal"></div>
-    </div>
 
+        <!-- Terminals Wrapper -->
+        <div id="terminals-wrapper">
+            <!-- 动态生成的终端容器将放在这里 -->
+        </div>
+
+    </div>
 </div>
 
 <!-- Scripts -->
@@ -125,89 +251,229 @@
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
 <script>
-    let socket;
-    let term;
-    let fitAddon;
-    const BACKEND_URL = 'http://localhost:3000'; // Default local backend
+    const BACKEND_URL = 'http://localhost:3000';
+    const sessions = {};
+    let activeSessionId = 'new';
+    let sessionCounter = 0;
 
-    // Check if backend is reachable
-    function checkBackend() {
-        // Simple check via socket io connection attempt later
-    }
-
-    function initTerminal() {
-        if (term) return;
-        
-        term = new Terminal({
-            cursorBlink: true,
-            theme: {
-                background: '#000000',
-                foreground: '#ffffff'
-            },
-            fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-            fontSize: 14
+    // 页面加载完成后，检查后端连接
+    window.onload = function() {
+        const testSocket = io(BACKEND_URL);
+        testSocket.on('connect_error', () => {
+            document.getElementById('server-status').style.display = 'inline-flex';
+            mdui.snackbar({message: '无法连接到后端服务，请确保 server.js 已启动', timeout: 3000});
+        });
+        testSocket.on('connect', () => {
+            testSocket.disconnect();
         });
         
-        fitAddon = new FitAddon.FitAddon();
-        term.loadAddon(fitAddon);
-        term.open(document.getElementById('terminal'));
-        fitAddon.fit();
+        // 初始化 MDUI Select
+        mdui.mutation();
+    };
 
-        window.addEventListener('resize', () => {
-            if (fitAddon) {
-                fitAddon.fit();
-                if(socket && socket.connected) {
-                     socket.emit('resize', { 
-                        cols: term.cols, 
-                        rows: term.rows,
-                        width: document.getElementById('terminal').clientWidth,
-                        height: document.getElementById('terminal').clientHeight
-                    });
+    function showNewConnectionForm() {
+        activeSessionId = 'new';
+        updateTabStyles();
+        document.getElementById('connection-form').style.display = 'block';
+        
+        // 隐藏所有终端
+        Object.values(sessions).forEach(session => {
+            session.container.style.display = 'none';
+        });
+    }
+
+    function updateTabStyles() {
+        // 更新 New Tab
+        const newTab = document.getElementById('tab-new');
+        if (activeSessionId === 'new') {
+            newTab.classList.add('active');
+        } else {
+            newTab.classList.remove('active');
+        }
+
+        // 更新其他 Tabs
+        Object.keys(sessions).forEach(id => {
+            const tab = document.getElementById(`tab-${id}`);
+            if (tab) {
+                if (id === activeSessionId) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
                 }
             }
         });
-
-        term.onData(data => {
-            if (socket && socket.connected) {
-                socket.emit('client-data', data);
-            }
-        });
     }
 
-    function connectSSH() {
+    function startNewSession() {
         const host = document.getElementById('host').value;
         const port = document.getElementById('port').value;
         const username = document.getElementById('username').value;
         const password = document.getElementById('password').value;
+        
+        // 获取外观设置
+        const fontFamily = document.getElementById('font-family').value;
+        const fontSize = parseInt(document.getElementById('font-size').value) || 14;
 
         if (!host || !username || !password) {
             mdui.snackbar({message: '请填写完整连接信息'});
             return;
         }
 
-        // Initialize Socket.io
-        socket = io(BACKEND_URL);
+        const sessionId = 's' + (++sessionCounter);
+        const title = `${username}@${host}`;
+        
+        createSessionUI(sessionId, title);
+        
+        // 初始化 Session 对象
+        const session = {
+            id: sessionId,
+            host, port, username,
+            fontFamily, fontSize, // 保存外观设置
+            socket: null,
+            term: null,
+            fitAddon: null,
+            container: document.getElementById(`term-${sessionId}`),
+            status: 'connecting'
+        };
+        sessions[sessionId] = session;
+
+        // 切换到新 Tab
+        switchSession(sessionId);
+
+        // 开始连接
+        connectSession(session, password);
+    }
+
+    function createSessionUI(sessionId, title) {
+        // 1. 添加 Tab
+        const tabHtml = `
+            <div class="session-tab" id="tab-${sessionId}" onclick="switchSession('${sessionId}')">
+                <span class="session-tab-title" title="${title}">${title}</span>
+                <i class="material-icons session-tab-close" onclick="closeSession('${sessionId}', event)">close</i>
+            </div>
+        `;
+        const tabsContainer = document.getElementById('session-tabs');
+        tabsContainer.insertAdjacentHTML('beforeend', tabHtml);
+
+        // 2. 添加 Terminal Container
+        const terminalHtml = `
+            <div id="term-${sessionId}" class="terminal-instance-wrapper">
+                <div class="mdui-toolbar mdui-color-black mdui-text-color-white-text" style="min-height: 40px; height: 40px;">
+                    <span class="mdui-typo-body-2">${title}</span>
+                    <div class="mdui-toolbar-spacer"></div>
+                    <span class="status-text mdui-typo-caption-opacity" id="status-${sessionId}">Connecting...</span>
+                </div>
+                <div id="xterm-${sessionId}" style="flex:1; width:100%;"></div>
+            </div>
+        `;
+        document.getElementById('terminals-wrapper').insertAdjacentHTML('beforeend', terminalHtml);
+    }
+
+    function switchSession(sessionId) {
+        if (sessionId === 'new') {
+            showNewConnectionForm();
+            return;
+        }
+
+        if (!sessions[sessionId]) return;
+
+        activeSessionId = sessionId;
+        updateTabStyles();
+
+        // 隐藏 New Form
+        document.getElementById('connection-form').style.display = 'none';
+
+        // 隐藏其他 Terminals，显示当前 Terminal
+        Object.values(sessions).forEach(s => {
+            if (s.id === sessionId) {
+                s.container.style.display = 'flex';
+                // 重新适应大小
+                if (s.fitAddon) {
+                    setTimeout(() => {
+                        s.fitAddon.fit();
+                        s.term.focus();
+                    }, 0);
+                }
+            } else {
+                s.container.style.display = 'none';
+            }
+        });
+    }
+
+    function closeSession(sessionId, event) {
+        if (event) event.stopPropagation();
+
+        const session = sessions[sessionId];
+        if (!session) return;
+
+        if (session.socket) session.socket.disconnect();
+        if (session.term) session.term.dispose();
+
+        const tab = document.getElementById(`tab-${sessionId}`);
+        if (tab) tab.remove();
+        
+        const container = document.getElementById(`term-${sessionId}`);
+        if (container) container.remove();
+
+        delete sessions[sessionId];
+
+        if (activeSessionId === sessionId) {
+            const remainingIds = Object.keys(sessions);
+            if (remainingIds.length > 0) {
+                switchSession(remainingIds[remainingIds.length - 1]);
+            } else {
+                showNewConnectionForm();
+            }
+        }
+    }
+
+    function connectSession(session, password) {
+        const termElement = document.getElementById(`xterm-${session.id}`);
+        const statusElement = document.getElementById(`status-${session.id}`);
+
+        // Init Terminal with Custom Fonts
+        const term = new Terminal({
+            cursorBlink: true,
+            theme: { background: '#000000', foreground: '#ffffff' },
+            fontFamily: session.fontFamily, // 应用字体
+            fontSize: session.fontSize        // 应用大小
+        });
+        const fitAddon = new FitAddon.FitAddon();
+        term.loadAddon(fitAddon);
+        term.open(termElement);
+        
+        session.term = term;
+        session.fitAddon = fitAddon;
+
+        setTimeout(() => fitAddon.fit(), 100);
+
+        // Init Socket
+        const socket = io(BACKEND_URL);
+        session.socket = socket;
+
+        term.writeln('\x1b[33mConnecting to backend...\x1b[0m');
 
         socket.on('connect', () => {
-            console.log('Connected to backend');
-            mdui.snackbar({message: '已连接到后端服务，正在建立SSH连接...'});
-            
-            // Send SSH connection details
-            socket.emit('ssh-connect', { host, port, username, password });
+            statusElement.innerText = 'Backend Connected';
+            term.writeln('\x1b[32mBackend connected. Establishing SSH session...\x1b[0m');
+            socket.emit('ssh-connect', {
+                host: session.host,
+                port: session.port,
+                username: session.username,
+                password: password
+            });
         });
 
         socket.on('connect_error', (err) => {
-            console.error('Backend connection error:', err);
-            mdui.snackbar({message: '无法连接到后端服务，请确保 server.js 已启动 (node server.js)', timeout: 5000});
-            document.getElementById('server-status').style.display = 'inline-flex';
+            statusElement.innerText = 'Connection Error';
+            term.writeln(`\r\n\x1b[31mError connecting to backend: ${err.message}\x1b[0m`);
         });
 
         socket.on('ssh-ready', () => {
-            document.getElementById('connection-form').style.display = 'none';
-            document.getElementById('terminal-container').style.display = 'block';
-            initTerminal();
+            statusElement.innerText = 'Connected';
+            term.clear();
             fitAddon.fit();
-             socket.emit('resize', { 
+            socket.emit('resize', { 
                 cols: term.cols, 
                 rows: term.rows
             });
@@ -219,28 +485,32 @@
         });
 
         socket.on('ssh-error', (msg) => {
-            mdui.snackbar({message: 'SSH错误: ' + msg});
-            disconnectSSH();
+            statusElement.innerText = 'SSH Error';
+            term.writeln(`\r\n\x1b[31mSSH Error: ${msg}\x1b[0m`);
         });
 
         socket.on('ssh-close', () => {
-            mdui.snackbar({message: 'SSH连接已断开'});
-            disconnectSSH();
+            statusElement.innerText = 'Disconnected';
+            term.writeln('\r\n\x1b[33mSSH Connection Closed.\x1b[0m');
         });
+
+        term.onData(data => {
+            if (socket.connected) {
+                socket.emit('client-data', data);
+            }
+        });
+
+        const resizeHandler = () => {
+            if (session.container.style.display !== 'none' && session.fitAddon) {
+                session.fitAddon.fit();
+                if (socket.connected) {
+                    socket.emit('resize', { cols: session.term.cols, rows: session.term.rows });
+                }
+            }
+        };
+        window.addEventListener('resize', resizeHandler);
     }
 
-    function disconnectSSH() {
-        if (socket) {
-            socket.disconnect();
-        }
-        if (term) {
-            term.dispose();
-            term = null;
-        }
-        document.getElementById('connection-form').style.display = 'block';
-        document.getElementById('terminal-container').style.display = 'none';
-        document.getElementById('server-status').style.display = 'none';
-    }
 </script>
 
 </body>
