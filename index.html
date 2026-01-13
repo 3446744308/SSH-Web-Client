@@ -162,7 +162,7 @@
             <div class="mdui-card-content mdui-valign mdui-p-a-1">
                 <i class="mdui-icon material-icons mdui-text-color-theme mdui-m-r-1">security</i>
                 <div class="mdui-typo-caption mdui-text-color-theme-text" style="flex-grow: 1;">
-                    郑重承诺：本工具所有数据交互均在您的本地网络中进行，绝不会收集或上传您的任何服务器敏感信息，请放心使用。
+                    郑重承诺：本工具所有数据交互均在您的本地网络中进行，绝不会收集或上传您的任何服务器敏感信息，请放心使用。<br><font style="font-weight:bold">linux命令手册</font>https://www.linuxcool.com/
                 </div>
                 <button class="mdui-btn mdui-btn-icon mdui-btn-dense mdui-ripple mdui-text-color-grey-600" onclick="document.getElementById('privacy-notice').style.display='none'">
                     <i class="mdui-icon material-icons">close</i>
@@ -174,7 +174,7 @@
         <div class="mdui-card connection-card" id="connection-form">
             <div class="mdui-card-primary">
                 <div class="mdui-card-primary-title">新建连接</div>
-                <div class="mdui-card-primary-subtitle">请输入SSH服务器信息 (需启动本地Server)</div>
+                <div class="mdui-card-primary-subtitle">请输入SSH服务器信息</div>
             </div>
             <div class="mdui-card-content">
                 <div class="mdui-row">
@@ -498,6 +498,13 @@
 
         socket.on('ssh-ready', () => {
             statusElement.innerText = 'Connected';
+            
+            // 连接成功，自动隐藏隐私提示
+            const privacyNotice = document.getElementById('privacy-notice');
+            if (privacyNotice) {
+                privacyNotice.style.display = 'none';
+            }
+
             term.clear();
             
             // 连接成功后再次强制 fit，确保布局正确
