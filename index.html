@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线SSH连接工具</title>
+    <!-- MDUI CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/mdui@1.0.2/dist/css/mdui.min.css"/>
+    <!-- Xterm.js CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/xterm@5.3.0/css/xterm.css" />
+    <style>
+        body {
+            background-color: #f1f1f1;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .terminal-container {
+            margin-top: 20px;
+            padding: 10px;
+            background: #000;
+            border-radius: 4px;
+            box-shadow: 0 2px 2px 0 rgba(0,0,0,.14), 0 3px 1px -2px rgba(0,0,0,.2), 0 1px 5px 0 rgba(0,0,0,.12);
+            display: none; /* Initially hidden */
+        }
+        #terminal {
+            width: 100%;
+            height: 600px;
+        }
+        .connection-card {
+            padding: 20px;
+        }
+        .status-bar {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="mdui-theme-primary-indigo mdui-theme-accent-pink">
+
+<div class="mdui-appbar mdui-appbar-fixed">
+    <div class="mdui-toolbar mdui-color-theme">
+        <a href="../../index.html" class="mdui-btn mdui-btn-icon" mdui-tooltip="{content: '返回主页'}">
+            <i class="mdui-icon material-icons">arrow_back</i>
+        </a>
+        <a href="javascript:;" class="mdui-typo-headline">SSH Web Client</a>
+        <div class="mdui-toolbar-spacer"></div>
+    </div>
+</div>
+
+<div class="mdui-container container" style="margin-top: 80px;">
+    
+    <!-- Connection Form -->
+    <div class="mdui-card connection-card" id="connection-form">
+        <div class="mdui-card-primary">
+            <div class="mdui-card-primary-title">新建连接</div>
+            <div class="mdui-card-primary-subtitle">请输入SSH服务器信息 (需启动本地Server)</div>
+        </div>
+        <div class="mdui-card-content">
+            <div class="mdui-row">
+                <div class="mdui-col-xs-12 mdui-col-sm-8">
+                    <div class="mdui-textfield mdui-textfield-floating-label">
+                        <i class="mdui-icon material-icons">dns</i>
+                        <label class="mdui-textfield-label">主机地址 (Host)</label>
+                        <input class="mdui-textfield-input" type="text" id="host" value="localhost"/>
+                    </div>
+                </div>
+                <div class="mdui-col-xs-12 mdui-col-sm-4">
+                    <div class="mdui-textfield mdui-textfield-floating-label">
+                        <i class="mdui-icon material-icons">settings_input_component</i>
+                        <label class="mdui-textfield-label">端口 (Port)</label>
+                        <input class="mdui-textfield-input" type="number" id="port" value="22"/>
+                    </div>
+                </div>
+            </div>
+            <div class="mdui-row">
+                <div class="mdui-col-xs-12 mdui-col-sm-6">
+                    <div class="mdui-textfield mdui-textfield-floating-label">
+                        <i class="mdui-icon material-icons">person</i>
+                        <label class="mdui-textfield-label">用户名 (Username)</label>
+                        <input class="mdui-textfield-input" type="text" id="username" />
+                    </div>
+                </div>
+                <div class="mdui-col-xs-12 mdui-col-sm-6">
+                    <div class="mdui-textfield mdui-textfield-floating-label">
+                        <i class="mdui-icon material-icons">vpn_key</i>
+                        <label class="mdui-textfield-label">密码 (Password)</label>
+                        <input class="mdui-textfield-input" type="password" id="password" />
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="mdui-card-actions">
+            <button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-theme-accent" onclick="connectSSH()">
+                <i class="mdui-icon material-icons mdui-icon-left">link</i> 连接
+            </button>
+            <div class="mdui-chip" id="server-status" style="display:none; margin-left: 10px;">
+                <span class="mdui-chip-icon"><i class="mdui-icon material-icons">error</i></span>
+                <span class="mdui-chip-title">后端服务未连接</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Terminal Area -->
+    <div class="terminal-container" id="terminal-container">
+        <div class="mdui-toolbar mdui-color-black mdui-text-color-white-text">
+            <span class="mdui-typo-title">Terminal</span>
+            <div class="mdui-toolbar-spacer"></div>
+            <button class="mdui-btn mdui-btn-icon" onclick="disconnectSSH()" mdui-tooltip="{content: '断开连接'}">
+                <i class="mdui-icon material-icons">close</i>
+            </button>
+        </div>
+        <div id="terminal"></div>
+    </div>
+
+</div>
+
+<!-- Scripts -->
+<script src="https://unpkg.com/mdui@1.0.2/dist/js/mdui.min.js"></script>
+<script src="https://unpkg.com/xterm@5.3.0/lib/xterm.js"></script>
+<script src="https://unpkg.com/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+<script>
+    let socket;
+    let term;
+    let fitAddon;
+    const BACKEND_URL = 'http://localhost:3000'; // Default local backend
+
+    // Check if backend is reachable
+    function checkBackend() {
+        // Simple check via socket io connection attempt later
+    }
+
+    function initTerminal() {
+        if (term) return;
+        
+        term = new Terminal({
+            cursorBlink: true,
+            theme: {
+                background: '#000000',
+                foreground: '#ffffff'
+            },
+            fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+            fontSize: 14
+        });
+        
+        fitAddon = new FitAddon.FitAddon();
+        term.loadAddon(fitAddon);
+        term.open(document.getElementById('terminal'));
+        fitAddon.fit();
+
+        window.addEventListener('resize', () => {
+            if (fitAddon) {
+                fitAddon.fit();
+                if(socket && socket.connected) {
+                     socket.emit('resize', { 
+                        cols: term.cols, 
+                        rows: term.rows,
+                        width: document.getElementById('terminal').clientWidth,
+                        height: document.getElementById('terminal').clientHeight
+                    });
+                }
+            }
+        });
+
+        term.onData(data => {
+            if (socket && socket.connected) {
+                socket.emit('client-data', data);
+            }
+        });
+    }
+
+    function connectSSH() {
+        const host = document.getElementById('host').value;
+        const port = document.getElementById('port').value;
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+
+        if (!host || !username || !password) {
+            mdui.snackbar({message: '请填写完整连接信息'});
+            return;
+        }
+
+        // Initialize Socket.io
+        socket = io(BACKEND_URL);
+
+        socket.on('connect', () => {
+            console.log('Connected to backend');
+            mdui.snackbar({message: '已连接到后端服务，正在建立SSH连接...'});
+            
+            // Send SSH connection details
+            socket.emit('ssh-connect', { host, port, username, password });
+        });
+
+        socket.on('connect_error', (err) => {
+            console.error('Backend connection error:', err);
+            mdui.snackbar({message: '无法连接到后端服务，请确保 server.js 已启动 (node server.js)', timeout: 5000});
+            document.getElementById('server-status').style.display = 'inline-flex';
+        });
+
+        socket.on('ssh-ready', () => {
+            document.getElementById('connection-form').style.display = 'none';
+            document.getElementById('terminal-container').style.display = 'block';
+            initTerminal();
+            fitAddon.fit();
+             socket.emit('resize', { 
+                cols: term.cols, 
+                rows: term.rows
+            });
+            term.focus();
+        });
+
+        socket.on('ssh-data', (data) => {
+            term.write(data);
+        });
+
+        socket.on('ssh-error', (msg) => {
+            mdui.snackbar({message: 'SSH错误: ' + msg});
+            disconnectSSH();
+        });
+
+        socket.on('ssh-close', () => {
+            mdui.snackbar({message: 'SSH连接已断开'});
+            disconnectSSH();
+        });
+    }
+
+    function disconnectSSH() {
+        if (socket) {
+            socket.disconnect();
+        }
+        if (term) {
+            term.dispose();
+            term = null;
+        }
+        document.getElementById('connection-form').style.display = 'block';
+        document.getElementById('terminal-container').style.display = 'none';
+        document.getElementById('server-status').style.display = 'none';
+    }
+</script>
+
+</body>
+</html>
